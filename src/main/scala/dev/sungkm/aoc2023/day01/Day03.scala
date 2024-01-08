@@ -7,38 +7,66 @@ import cats.syntax.all.*
 object Day03 extends ResourceApp.Simple:
 
   case class EngineSchematic(
-    numberMap: Map[(Int, Int), Int],
-    symbolPosition: Set[(Int, Int)],
+      numberIndex: IndexedSeq[Int],
+      numberMap: Map[(Int, Int), Int],
+      symbolPosition: Set[(Int, Int, Char)],
   ):
-    def partNumbers: Set[Int] = symbolPosition.flatMap:
-      case (rowIndex, colIndex) =>
-        val adjacentNumbers = for
-          row <- rowIndex - 1 to rowIndex + 1
-          col <- colIndex - 1 to colIndex + 1
-          num <- numberMap.get((row, col)).toSeq
-        yield num
-        adjacentNumbers.toSet
+    def partNumbers: Seq[(Int, Int)] = symbolPosition
+      .flatMap: (rowIndex, colIndex, _) =>
+        for
+          row   <- rowIndex - 1 to rowIndex + 1
+          col   <- colIndex - 1 to colIndex + 1
+          index <- numberMap.get((row, col)).toSeq
+        yield index
+      .toSeq
+      .map: index =>
+        (numberIndex(index), index)
+    def gearRatios: Seq[BigInt] = for
+      symbolPos <- symbolPosition.toSeq
+      (rowIndex, colIndex, symbol) = symbolPos if symbol == '*'
+      gearCandidates =
+        val seq = for
+          col   <- colIndex - 1 to colIndex + 1
+          row   <- rowIndex - 1 to rowIndex + 1
+          index <- numberMap.get((row, col)).toSeq
+        yield index
+        seq.toSet
+      if gearCandidates.toSet.size == 2
+    yield gearCandidates.map(numberIndex(_)).map(BigInt(_)).product
 
   object EngineSchematic:
     def parse(input: String): EngineSchematic =
-      val (numberMap, symbolPosition) = input.split("\n").zipWithIndex
-        .foldLeft((Map.empty[(Int, Int), Int], Set.empty[(Int, Int)])):
-          case ((numberMap, symbolPosition), (line, rowIndex)) =>
-            val numberMap1 = "\\d+".r.findAllMatchIn(line)
-              .flatMap: m =>
-                (m.start to m.end).map: i =>
-                  ((rowIndex, i), m.matched.toInt)
-              .toMap
-            val symbolPosition1 = for
-              chWithIndex <- line.zipWithIndex
-              (ch, colIndex) = chWithIndex
-              if ch != '.' && !ch.isDigit
-            yield (rowIndex, colIndex)
-            (numberMap ++ numberMap1, symbolPosition ++ symbolPosition1.toSet)
-      EngineSchematic(numberMap, symbolPosition)
+      val linesWithIndex = input.split("\n").zipWithIndex
+      val numbers = linesWithIndex.foldLeft(List.empty[(Int, (Int, Int, Int))]):
+        case (numbers, (line, rowIndex)) =>
+          val matched = "\\d+".r
+            .findAllMatchIn(line)
+            .map: m =>
+              (m.matched.toInt, (rowIndex, m.start, m.end))
+          matched.toList.reverse ::: numbers
+      val symbolPosition = linesWithIndex.foldLeft(Set.empty[(Int, Int, Char)]):
+        case (symbolPosition, (line, rowIndex)) =>
+          val symbolPosition1 = for
+            chWithIndex <- line.zipWithIndex
+            (ch, colIndex) = chWithIndex
+            if ch != '.' && !ch.isDigit
+          yield (rowIndex, colIndex, ch)
+          symbolPosition ++ symbolPosition1.toSet
+      val (numberIndex, numberPositions) = numbers.reverse.unzip
+      val numberMap =
+        numberPositions.zipWithIndex.foldLeft(Map.empty[(Int, Int), Int]):
+          case (numberMap, ((rowIndex, colStart, colEnd), numberIndex)) =>
+            numberMap ++ (colStart until colEnd).map: colIndex =>
+              ((rowIndex, colIndex), numberIndex)
+      EngineSchematic(numberIndex.toIndexedSeq, numberMap, symbolPosition)
 
   def part1(input: String): BigInt =
-    EngineSchematic.parse(input).partNumbers.map(BigInt(_)).sum
+    val engineSchematic = EngineSchematic.parse(input)
+    engineSchematic.partNumbers.map(_._1).map(BigInt(_)).sum
+
+  def part2(input: String): BigInt =
+    val engineSchematic = EngineSchematic.parse(input)
+    engineSchematic.gearRatios.sum
 
   def printAns[F[_]: Console: Sync](path: String): Resource[F, Unit] =
     Resource
@@ -49,7 +77,7 @@ object Day03 extends ResourceApp.Simple:
       .evalMap: input =>
         for
           _ <- Console[F].println(part1(input))
-//          _ <- Console[F].println(part2(input))
+          _ <- Console[F].println(part2(input))
         yield ()
 
   def run: Resource[IO, Unit] = printAns[IO]("input/day3")

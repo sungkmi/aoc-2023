@@ -16,5 +16,5 @@ class Day03Test extends munit.FunSuite:
   test("part1"):
       assertEquals(Day03.part1(example), BigInt(4361))
 
-//  test("part2"):
-//      assertEquals(Day03.part2(example), BigInt(2286))
+  test("part2"):
+      assertEquals(Day03.part2(example), BigInt(467835))
