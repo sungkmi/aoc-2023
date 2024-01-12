@@ -39,10 +39,5 @@ humidity-to-location map:
   test("part1"):
       assertEquals(Day05.part1(example), BigInt(35))
 
-  test("mappingRanges"):
-    val result = Day05.MappingRanges(45, 77, 23).convertRanges((74, 88))
-    println(s"Result: $result")
-
-
   test("part2"):
       assertEquals(Day05.part2(example), BigInt(46))

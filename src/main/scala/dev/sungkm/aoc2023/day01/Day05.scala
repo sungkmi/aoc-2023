@@ -7,28 +7,36 @@ import cats.syntax.all.*
 object Day05 extends ResourceApp.Simple:
 
   case class Almanac(
-    seeds: Seq[BigInt],
-    maps: Seq[AlmanacMap],
+      seeds: Seq[BigInt],
+      maps: Seq[AlmanacMap],
   ):
     def locations: Seq[BigInt] = seeds.map: seed =>
       maps.foldLeft(seed): (source, map) =>
         map.convert(source)
 
     def rangeLocations: Seq[(BigInt, BigInt)] =
-      val seedRanges = seeds.sliding(2, 2).toSeq.map:
-        case Seq(start, range) => (start, start + range)
+      val seedRanges = seeds
+        .sliding(2, 2)
+        .toSeq
+        .map:
+          case Seq(start, range) => (start, start + range)
+
+      println(s"Seed Ranges: ${seedRanges.sorted}")
       maps.foldLeft(seedRanges): (sourceRanges, map) =>
-        println(s"sourceRanges: $sourceRanges, map: $map")
-        map.convertRanges(sourceRanges)
+        val result = map.convertRanges(sourceRanges)
+        println(s"map: ${map}")
+        println(s"===> result: ${result.sorted}")
+        result
 
   object Almanac:
     def parse(input: String): Almanac =
       val lines = input.split("\n\n").toSeq
-      val seeds = lines.head.stripPrefix("seeds: ").split(" ").map(BigInt(_)).toSeq
+      val seeds =
+        lines.head.stripPrefix("seeds: ").split(" ").map(BigInt(_)).toSeq
       val maps = lines.tail.map(AlmanacMap.parse)
 
       Almanac(seeds, maps)
-  
+
   case class AlmanacMap(mappingRanges: Seq[MappingRanges]):
     def convert(sourceIndex: BigInt): BigInt =
       def loop(mappingRanges: List[MappingRanges]): BigInt =
@@ -40,20 +48,26 @@ object Day05 extends ResourceApp.Simple:
               case None            => loop(tail)
       loop(mappingRanges.toList)
     def convertRanges(ranges: Seq[(BigInt, BigInt)]): Seq[(BigInt, BigInt)] =
-      println(s"===> ranges: $ranges, mappingRanges: $mappingRanges")
-      val result = mappingRanges.foldLeft(ranges): (ranges, mappingRange) =>
-        println(s"--- With mapping range: $mappingRange")
-        val result1 = ranges.flatMap(mappingRange.convertRanges)
-        println(s"--- $ranges => $result1")
-        result1
-      println(s"===> result: $result")
-      result
+      val (convertedRanges, unconvertedRanges) =
+        mappingRanges.foldLeft((Seq.empty[(BigInt, BigInt)], ranges)):
+          case ((convertedRanges, unconvertedRanges), mappingRange) =>
+            val (convertedRangeOptions, unconvertedRanges1) =
+              unconvertedRanges.map(mappingRange.convertRange).unzip
+            (
+              convertedRanges ++ convertedRangeOptions.map(_.toSeq).flatten,
+              unconvertedRanges1.flatten,
+            )
+      convertedRanges ++ unconvertedRanges
 
   object AlmanacMap:
     def parse(input: String): AlmanacMap =
-      val mappingRanges = input.split("\n").tail.toSeq.map: line =>
-        val Array(dest, source, length) = line.split(" ").map(BigInt(_))
-        MappingRanges(dest, source, length)
+      val mappingRanges = input
+        .split("\n")
+        .tail
+        .toSeq
+        .map: line =>
+          val Array(dest, source, length) = line.split(" ").map(BigInt(_))
+          MappingRanges(dest, source, length)
       AlmanacMap(mappingRanges)
 
   case class MappingRanges(dest: BigInt, source: BigInt, length: BigInt):
@@ -61,19 +75,23 @@ object Day05 extends ResourceApp.Simple:
       if sourceIndex >= source && sourceIndex < source + length then
         Some(dest + sourceIndex - source)
       else None
-    def convertRanges(range: (BigInt, BigInt)): Seq[(BigInt, BigInt)] =
+    def convertRange(
+        range: (BigInt, BigInt),
+    ): (Option[(BigInt, BigInt)], Seq[(BigInt, BigInt)]) =
       val (start, end) = range
-      if end <= source || start >= source + length then
-        Seq(range)
+      if end <= source || start >= source + length then (None, Seq(range))
       else if start >= source && end <= source + length then
-        Seq((dest + start - source, dest + end - source))
+        (Some((dest + start - source, dest + end - source)), Seq.empty)
       else if start >= source then
         /*
-              | -------- | ----------- | -------------- | 
+              | -------- | ----------- | -------------- |
              source      start   source + length       end
           ==> (dest + start - source, dest + length), (source + length, end)
          */
-        Seq((dest + start - source, dest + length), (source + length, end))
+        (
+          Option((dest + start - source, dest + length)),
+          Seq((source + length, end)),
+        )
       else if end <= source + length then
         /*
               | -------- | ----------- | -------------- |
@@ -81,14 +99,17 @@ object Day05 extends ResourceApp.Simple:
           ==> (dest, dest + end - source), (start, source)
          */
 
-        Seq((dest, dest + end - source), (start, source))
+        (Option((dest, dest + end - source)), Seq((start, source)))
       else
         /*
               | -------- | ----------- | -------------- |
             start      source         source + length       end
           ==> (dest, dest + length), (start, source), (source + length, end)
          */
-        Seq((dest, dest + length), (start, source), (source + length, end))
+        (
+          Option((dest, dest + length)),
+          Seq((start, source), (source + length, end)),
+        )
 
   def part1(input: String): BigInt = Almanac.parse(input).locations.min
 
